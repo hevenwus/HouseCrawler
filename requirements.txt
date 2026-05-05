@@ -1,0 +1,6 @@
+
+requests&gt;=2.28.0
+beautifulsoup4&gt;=4.11.0
+lxml&gt;=4.9.0
+pyquery&gt;=1.4.0
+

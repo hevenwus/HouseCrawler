@@ -1,66 +1,54 @@
-import json
-import time
 
-from pyquery import PyQuery as pq
+from utils import get_pq, append_item, delay, crawler_context, logger
 
-def startGetData(url):
-    doc = pq(url=url)
 
-    titles = doc('.content__list--item--aside')
-    titleList = []
-    hrefList = []
-    for item in titles.items():
-        titleList.append(item.attr('title'))
-        hrefList.append('https://sh.zu.ke.com' + item.attr('href'))
+def start_get_data(url: str):
+    doc = get_pq(url)
+    if not doc:
+        return
 
-    imgs = doc('.content__list--item--aside img')
-    imgList = []
-    for item in imgs.items():
-        img = item.attr('data-src')
-        imgList.append(img)
+    items_aside = doc('.content__list--item--aside')
+    items_img = doc('.content__list--item--aside img')
+    items_location = doc('.content__list--item--des')
+    items_price = doc('.content__list--item-price')
+    items_time = doc('.content__list--item--time.oneline')
+    items_tag = doc('.content__list--item--bottom.oneline')
 
-    locations = doc('.content__list--item--des')
-    locationList = []
-    for item in locations.items():
-        locationList.append(item.text().strip())
+    title_list = [item.attr('title') for item in items_aside.items()]
+    href_list = ['https://sh.zu.ke.com' + item.attr('href') for item in items_aside.items()]
+    img_list = [item.attr('data-src') for item in items_img.items()]
+    location_list = [item.text().strip() for item in items_location.items()]
+    price_list = [item.text().strip() for item in items_price.items()]
+    time_list = [item.text().strip() for item in items_time.items()]
+    tag_list = [item.text().strip() for item in items_tag.items()]
 
-    unitPrices = doc('.content__list--item-price')
-    unitPriceList = []
-    for item in unitPrices.items():
-        unitPriceList.append(item.text().strip())
+    min_len = min(len(title_list), len(href_list), len(img_list),
+                  len(location_list), len(price_list), len(time_list), len(tag_list))
 
-    timeInfos = doc('.content__list--item--time.oneline')
-    timeInfoList = []
-    for item in timeInfos.items():
-        timeInfoList.append(item.text().strip())
-
-    tags = doc('.content__list--item--bottom.oneline')
-    tagList = []
-    for item in tags.items():
-        tagList.append(item.text().strip())
-
-    i = 0
-    for item in imgList:
+    for i in range(min_len):
         yield {
-            'title': titleList[i],  # 标题
-            'unitPrice': unitPriceList[i],  # 租金
-            'location': locationList[i],  # 地址
-            'time': timeInfoList[i],  # 发布时间
-            'tag': tagList[i],  # 标签
-            'href': hrefList[i],  # 跳转链接
-            'image': imgList[i],  # 图片
+            'title': title_list[i],
+            'unitPrice': price_list[i],
+            'location': location_list[i],
+            'time': time_list[i],
+            'tag': tag_list[i],
+            'href': href_list[i],
+            'image': img_list[i]
         }
-        i += 1
 
-def write_to_file(content):
-    with open('chengjiao.txt', 'a', encoding='utf-8') as f:
-        f.write(json.dumps(content, ensure_ascii=False) + ',\n')
+
+def start_crawler(pages: int = 5, district: str = 'xuhui'):
+    base_url = f'https://sh.zu.ke.com/zufang/{district}/pg'
+
+    for i in range(1, pages + 1):
+        url = f'{base_url}{i}/'
+        for item in start_get_data(url):
+            logger.info(item)
+            append_item(item, 'zufang.txt')
+        delay()
+
 
 if __name__ == '__main__':
-    url = 'https://sh.zu.ke.com/zufang/xuhui/pg'
-    for i in range(5):
-        param = url + str(i + 1) + '/'
-        for item in startGetData(param):
-            print(item)
-            # write_to_file(item)
-        time.sleep(1)
+    with crawler_context('贝壳租房'):
+        start_crawler(5, 'xuhui')
+

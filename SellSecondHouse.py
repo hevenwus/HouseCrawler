@@ -1,25 +1,17 @@
-#抓取合肥在售二手房
 
-import time
-import json
-import requests
-from bs4 import BeautifulSoup
-from requests.exceptions import RequestException
+from utils import (
+    get_html, get_soup, append_item, delay, crawler_context, logger
+)
 
-def get_one_page(url):
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36',
-        }
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            return response.text
-        return None
-    except RequestException:
-        return None
 
-def parse_two_page(html):
-    soup = BeautifulSoup(html, 'lxml')
+def parse_flood(items1, i):
+    if i &lt; len(items1) and items1[i].a:
+        return items1[i].a.text
+    return ''
+
+
+def parse_page(html: str):
+    soup = get_soup(html)
 
     items = soup.find_all(attrs={'class': 'img VIEWDATA CLICKDATA maidian-detail'})
     items1 = soup.find_all(attrs={'class': 'positionInfo'})
@@ -28,48 +20,42 @@ def parse_two_page(html):
     items4 = soup.find_all(attrs={'class': 'totalPrice'})
     items5 = soup.find_all(attrs={'class': 'unitPrice'})
 
-    i = 0
-    for item in items:
+    min_len = min(len(items), len(items1), len(items2), len(items3), len(items4), len(items5))
+    
+    for i in range(min_len):
         yield {
-            'flood': parse_flood(items1, i),  # 小区
-            'title': item.attrs['title'],  # 标题
-            'href': item.attrs['href'],  # 跳转链接
-            'alt': item.img['alt'],  # 描述
-            'totalPrice': items4[i].span.text,  # 总价
-            'unitPrice': items5[i].span.text,  # 单价
-            'houseInfo': items2[i].text.strip(),  # 房源描述
-            'followInfo': items3[i].text.strip()  # 房源发布时间及关注度
+            'flood': parse_flood(items1, i),
+            'title': items[i].attrs.get('title', ''),
+            'href': items[i].attrs.get('href', ''),
+            'alt': items[i].img['alt'] if items[i].img else '',
+            'totalPrice': items4[i].span.text if items4[i].span else '',
+            'unitPrice': items5[i].span.text if items5[i].span else '',
+            'houseInfo': items2[i].text.strip(),
+            'followInfo': items3[i].text.strip()
         }
-        i += 1
 
 
-def parse_flood(items1, i):
-    if(items1[i].a != None):
-        return items1[i].a.text
+def start_get_data(page: int, district: str = ''):
+    base_url = 'https://hf.ke.com/ershoufang/'
+    if district:
+        base_url = f'{base_url}{district}/pg'
     else:
-        return ''
-
-def write_to_file(content):
-    with open('sell.txt', 'a', encoding='utf-8') as f:f.write(json.dumps(content, ensure_ascii=False) + '\n')
-
-def startGetData(page, *district):
-    url = 'https://hf.ke.com/ershoufang/'
-
-    addrParam = ''
-    for param in district:
-        addrParam = str(param)
-    if (len(addrParam) > 0):
-        url = url + addrParam + '/pg'
-    else:
-        url = url + 'pg'
+        base_url = f'{base_url}pg'
 
     for i in range(page):
-        param = url + str(i + 1) + '/'
-        html = get_one_page(param)
-        for item in parse_two_page(html):
-            print(item)
-            write_to_file(item)
-        time.sleep(1)
+        url = f'{base_url}{i + 1}/'
+        html = get_html(url)
+        if not html:
+            continue
+
+        for item in parse_page(html):
+            logger.info(item)
+            append_item(item, 'sell.txt')
+
+        delay()
+
 
 if __name__ == '__main__':
-    startGetData(10, 'feixi')
+    with crawler_context('在售二手房'):
+        start_get_data(10, 'feixi')
+

@@ -1,37 +1,35 @@
-import json
-import time
 
-from pyquery import PyQuery as pq
+from utils import get_pq, append_item, delay, crawler_context, logger
 
-def startGetData(url):
-    doc = pq(url=url)
 
-    titles = doc('.title a')
-    titleList = []
-    hrefList = []
-    for item in titles.items():
-        titleList.append(item.attr('title'))
-        hrefList.append(item.attr('href'))
+def start_get_data(url: str):
+    doc = get_pq(url)
+    if not doc:
+        return
+
+    items = doc('.title a')
+
+    for item in items.items():
+        yield {
+            'title': item.attr('title'),
+            'href': item.attr('href')
+        }
+
+
+def start_crawler(max_start: int = 500):
+    base_url = 'https://www.douban.com/group/shanghaizufang/discussion?start='
 
     i = 0
-    for item in titleList:
-        yield {
-            'title': titleList[i],  # 标题
-            'href': hrefList[i],  # 跳转链接 xUehVfSuh6>h
-        }
-        i += 1
+    while i &lt;= max_start:
+        url = base_url + str(i)
+        for item in start_get_data(url):
+            logger.info(item)
+            append_item(item, 'douban.txt')
+        i += 25
+        delay()
 
-def write_to_file(content):
-    with open('douban.txt', 'a', encoding='utf-8') as f:
-        f.write(json.dumps(content, ensure_ascii=False) + ',\n')
 
 if __name__ == '__main__':
-    url = 'https://www.douban.com/group/shanghaizufang/discussion?start='
-    i = 0
-    while(i <= 500):
-        param = url + str(i)
-        for item in startGetData(param):
-            print(item)
-            write_to_file(item)
-        i += 25
-        time.sleep(1)
+    with crawler_context('豆瓣租房'):
+        start_crawler(500)
+

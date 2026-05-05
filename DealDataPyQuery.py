@@ -1,78 +1,60 @@
-# 利用pyquery抓取二手房成交数据
 
-import json
-import time
+from utils import get_pq, append_item, delay, crawler_context, logger
 
-from pyquery import PyQuery as pq
 
-def startGetData(url):
-    doc = pq(url=url)
+def start_get_data(url: str):
+    doc = get_pq(url)
+    if not doc:
+        return
 
-    imgs = doc('.img.CLICKDATA.maidian-detail img')
-    imgList = []
-    for item in imgs.items():
-        imgList.append(item.attr('data-original'))
+    items_img = doc('.img.CLICKDATA.maidian-detail img')
+    items_title = doc('.listContent li .info .title a')
+    items_deal_date = doc('.info .dealDate')
+    items_house_info = doc('.info .houseInfo')
+    items_total_price = doc('.info .totalPrice .number')
+    items_unit_price = doc('.info .flood .unitPrice')
+    items_position = doc('.info .flood .positionInfo')
+    items_deal_cycle = doc('.info .dealCycleeInfo .dealCycleTxt')
 
-    titles = doc('.listContent li .info .title a')
-    titleList = []
-    hrefList = []
-    for item in titles.items():
-        titleList.append(item.text().strip())
-        hrefList.append(item.attr('href'))
+    img_list = [item.attr('data-original') for item in items_img.items()]
+    title_list = [item.text().strip() for item in items_title.items()]
+    href_list = [item.attr('href') for item in items_title.items()]
+    deal_date_list = [item.text().strip() for item in items_deal_date.items()]
+    house_info_list = [item.text().strip() for item in items_house_info.items()]
+    total_price_list = [item.text().strip() + '万' for item in items_total_price.items()]
+    unit_price_list = [item.text().strip() for item in items_unit_price.items()]
+    position_list = [item.text().strip() for item in items_position.items()]
+    deal_cycle_list = [item.text().strip() for item in items_deal_cycle.items()]
 
-    dealDates = doc('.info .dealDate')
-    dealDateList = []
-    for item in dealDates.items():
-        dealDateList.append(item.text().strip())
+    min_len = min(len(img_list), len(title_list), len(href_list), len(deal_date_list),
+                  len(house_info_list), len(total_price_list), len(unit_price_list),
+                  len(position_list), len(deal_cycle_list))
 
-    houseInfos = doc('.info .houseInfo')
-    houseInfoList = []
-    for item in houseInfos.items():
-        houseInfoList.append(item.text().strip())
-
-    totalPrices = doc('.info .totalPrice .number')
-    totalPriceList = []
-    for item in totalPrices.items():
-        totalPriceList.append(item.text().strip() + '万')
-
-    unitPrices = doc('.info .flood .unitPrice')
-    unitPriceList = []
-    for item in unitPrices.items():
-        unitPriceList.append(item.text().strip())
-
-    positionInfos = doc('.info .flood .positionInfo')
-    positionInfoList = []
-    for item in positionInfos.items():
-        positionInfoList.append(item.text().strip())
-
-    dealCycleeInfos = doc('.info .dealCycleeInfo .dealCycleTxt')
-    dealCycleeInfoList = []
-    for item in dealCycleeInfos.items():
-        dealCycleeInfoList.append(item.text().strip())
-
-    i = 0
-    for item in imgList:
+    for i in range(min_len):
         yield {
-            'title': titleList[i],  # 标题
-            'totalPrice': totalPriceList[i],  # 总价
-            'unitPrice': unitPriceList[i],  # 单价
-            'dealDate': dealDateList[i],  # 房源成交时间
-            'dealInfo': dealCycleeInfoList[i],  # 挂牌信息
-            'href': hrefList[i],  # 跳转链接
-            'image': imgList[i],  # 图片
-            'houseInfo': houseInfoList[i] + positionInfoList[i],  # 房源描述
+            'title': title_list[i],
+            'totalPrice': total_price_list[i],
+            'unitPrice': unit_price_list[i],
+            'dealDate': deal_date_list[i],
+            'dealInfo': deal_cycle_list[i],
+            'href': href_list[i],
+            'image': img_list[i],
+            'houseInfo': house_info_list[i] + position_list[i]
         }
-        i += 1
 
-def write_to_file(content):
-    with open('deal.txt', 'a', encoding='utf-8') as f:f.write(json.dumps(content, ensure_ascii=False) + '\n')
+
+def start_crawler(pages: int = 10, district: str = 'feixi'):
+    base_url = f'https://hf.ke.com/chengjiao/{district}/pg'
+
+    for i in range(1, pages + 1):
+        url = f'{base_url}{i}/'
+        for item in start_get_data(url):
+            logger.info(item)
+            append_item(item, 'deal.txt')
+        delay()
 
 
 if __name__ == '__main__':
-    url = 'https://hf.ke.com/chengjiao/feixi/pg'
-    for i in range(10):
-        param = url + str(i + 1) + '/'
-        for item in startGetData(param):
-            print(item)
-            write_to_file(item)
-        time.sleep(1)
+    with crawler_context('二手房成交数据 (PyQuery)'):
+        start_crawler(10, 'feixi')
+

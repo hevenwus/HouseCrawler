@@ -1,86 +1,64 @@
-import json
-import time
 
-from pyquery import PyQuery as pq
+from utils import get_pq, append_item, delay, crawler_context, logger
 
-def startGetData(url):
-    doc = pq(url=url)
+
+def start_get_data(url: str):
+    doc = get_pq(url)
+    if not doc:
+        return
 
     items1 = doc('.listUnit-date.clearfix.PBA_list_house')
-    nameList = []
-    catList = []
-    variantList = []
-    priceList = []
-    for item in items1.items():
-        nameList.append(item.attr('name'))
-        catList.append(item.attr('category'))
-        variantList.append(item.attr('variant'))
-        priceList.append(int(item.attr('price')))
-
     items2 = doc('.pro-pic.li_phoneNum a')
-    hrefList = []
-    for item in items2.items():
-        hrefList.append(item.attr('href'))
-
     items3 = doc('.pro-pic.li_phoneNum a .lazy')
-    imgList = []
-    for item in items3.items():
-        imgList.append(item.attr('data-original'))
-
     items4 = doc('.list-pic-title h3 a')
-    titleList = []
-    for item in items4.items():
-        titleList.append(item.attr('title'))
-
     items5 = doc('.list-pic-ps')
-    infoList = []
-    for item in items5.items():
-        infoList.append(item.text())
-
     items6 = doc('.list-pic-ad')
-    addrList = []
-    for item in items6.items():
-        addrList.append(item.text())
-
     items7 = doc('.pro-lable')
-    tagList = []
-    for item in items7.items():
-        tagList.append(item.text())
-
     items8 = doc('.room-time')
-    timeList = []
-    for item in items8.items():
-        timeList.append(item.text())
 
-    i = 0
-    for item in nameList:
+    name_list = [item.attr('name') for item in items1.items()]
+    cat_list = [item.attr('category') for item in items1.items()]
+    variant_list = [item.attr('variant') for item in items1.items()]
+    price_list = [int(item.attr('price')) for item in items1.items()]
+    href_list = [item.attr('href') for item in items2.items()]
+    img_list = [item.attr('data-original') for item in items3.items()]
+    title_list = [item.attr('title') for item in items4.items()]
+    info_list = [item.text() for item in items5.items()]
+    addr_list = [item.text() for item in items6.items()]
+    tag_list = [item.text() for item in items7.items()]
+    time_list = [item.text() for item in items8.items()]
+
+    min_len = min(len(name_list), len(href_list), len(img_list), len(title_list),
+                  len(info_list), len(addr_list), len(tag_list), len(time_list))
+
+    for i in range(min_len):
         yield {
-            'name': nameList[i],  #
-            'category': catList[i],  #
-            'variant': variantList[i],  #
-            'price': priceList[i],  #
-            'href': hrefList[i], #
-            'img': imgList[i], #
-            'title': titleList[i], #
-            'house': infoList[i], #
-            'address': addrList[i], #
-            'remark': tagList[i], #
-            'time': timeList[i] #
+            'name': name_list[i],
+            'category': cat_list[i],
+            'variant': variant_list[i],
+            'price': price_list[i],
+            'href': href_list[i],
+            'image': img_list[i],
+            'title': title_list[i],
+            'house': info_list[i],
+            'address': addr_list[i],
+            'remark': tag_list[i],
+            'time': time_list[i]
         }
-        i += 1
 
-def write_to_file(content):
-    with open('baletu.txt', 'a', encoding='utf-8') as f:
-        f.write(json.dumps(content, ensure_ascii=False) + ',\n')
+
+def start_crawler(pages: int = 10):
+    base_url = 'http://sh.baletu.com/zhaofang/p{page_num}o1a1d900/?seachId=0&amp;is_rec_house=0&amp;entrance=14&amp;solr_house_cnt=5176'
+
+    for i in range(1, pages + 1):
+        url = base_url.format(page_num=i)
+        for item in start_get_data(url):
+            logger.info(item)
+            append_item(item, 'baletu.txt')
+        delay()
+
 
 if __name__ == '__main__':
-    url = 'http://sh.baletu.com/zhaofang/p{pageNum}o1a1d900/?seachId=0&is_rec_house=0&entrance=14&solr_house_cnt=5176'
+    with crawler_context('巴乐兔租房'):
+        start_crawler(10)
 
-    i = 1
-    while(i <= 10):
-        param = url.format(pageNum=i)
-        for item in startGetData(param):
-            print(item)
-            write_to_file(item)
-        i += 1
-        time.sleep(1)
